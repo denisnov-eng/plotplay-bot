@@ -1,6 +1,4 @@
 const TelegramBot = require('node-telegram-bot-api');
-const Database = require('better-sqlite3');
-const path = require('path');
 
 const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID || '99933936';
@@ -8,56 +6,23 @@ const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/PlotPlay_Bot/vote';
 
 if (!TOKEN) { console.error('❌ BOT_TOKEN not set'); process.exit(1); }
 
-// === ИНИЦИАЛИЗАЦИЯ SQLITE ===
-const dbPath = path.join(__dirname, 'database.db');
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
+// === ДЕМО-ДАННЫЕ (без базы данных) ===
+const stories = [
+    { id: 1, title: 'Новый директор', icon: '🎭', desc: 'Кто займёт кресло директора? Решаешь ты!' },
+    { id: 2, title: 'Дело №7', icon: '🕵️', desc: 'Загадочное убийство в особняке. Найди виновного.' },
+    { id: 3, title: 'Кровь и Бархат', icon: '🧛', desc: 'Вампирский бал. Чью сторону выберешь?' },
+    { id: 4, title: 'Петля', icon: '🚀', desc: 'Космическая станция теряет связь. Время на исходе.' }
+];
 
-// Создаём таблицы если их нет
-db.exec(`
-    CREATE TABLE IF NOT EXISTS mass_stories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        genre_icon TEXT DEFAULT '📖',
-        description TEXT DEFAULT '',
-        image_url TEXT DEFAULT '',
-        status TEXT DEFAULT 'active'
-    );
-    CREATE TABLE IF NOT EXISTS mass_votes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        story_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        option_id INTEGER NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-`);
-
-// Проверяем, есть ли данные. Если таблица пуста — добавляем демо-книги
-const count = db.prepare("SELECT COUNT(*) as c FROM mass_stories").get().c;
-if (count === 0) {
-    const insert = db.prepare("INSERT INTO mass_stories (title, genre_icon, description, status) VALUES (?, ?, ?, 'active')");
-    insert.run('Новый директор', '🎭', 'Кто займёт кресло директора? Решаешь ты!');
-    insert.run('Дело №7', '🕵️', 'Загадочное убийство в особняке. Найди виновного.');
-    insert.run('Кровь и Бархат', '🧛', 'Вампирский бал. Чью сторону выберешь?');
-    insert.run('Петля', '🚀', 'Космическая станция теряет связь. Время на исходе.');
-    console.log('✅ Demo data inserted');
-}
-
-// === БОТ ===
 const bot = new TelegramBot(TOKEN, { polling: true });
-console.log('✅ Bot started (SQLite)');
-console.log('🔍 DB file:', dbPath);
-console.log('📊 Stories count:', db.prepare("SELECT COUNT(*) as c FROM mass_stories").get().c);
-bot.on('message', (msg) => {
-    console.log(`📨 chat=${msg.chat.id} text="${msg.text}" user=${msg.from?.username}`);
-});
+console.log('✅ Bot started (NO DB)');
 
 bot.onText(/\/start/, async (msg) => {
     try { await sendWelcome(msg.chat.id); } catch(e) { console.error('start err:', e.message); }
 });
 
 bot.onText(/\/help/, (msg) => {
-    bot.sendMessage(msg.chat.id, '❓ <b>Помощь</b>\n\nНажмите /start', { parse_mode: 'HTML' });
+    bot.sendMessage(msg.chat.id, '❓ Помощь\n\nНажмите /start', { parse_mode: 'HTML' });
 });
 
 bot.on('callback_query', async (cb) => {
@@ -77,7 +42,7 @@ bot.on('callback_query', async (cb) => {
 
 async function sendWelcome(chatId) {
     await bot.sendMessage(chatId,
-        `👋 <b>Добро пожаловать в PlotPlay!</b>\n\nИнтерактивные истории, где ТЫ решаешь судьбу персонажей.\n\n📚 Читай книги\n🗳️ Голосуй за сюжет\n✍️ Стань автором`,
+        '👋 <b>Добро пожаловать в PlotPlay!</b>\n\nИнтерактивные истории, где ТЫ решаешь судьбу персонажей.\n\n📚 Читай книги\n🗳️ Голосуй за сюжет\n✍️ Стань автором',
         { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
             [{ text: '🚀 Старт', callback_data: 'catalog' }],
             [{ text: '🎬 Сезон 1', callback_data: 'season1' }],
@@ -87,30 +52,24 @@ async function sendWelcome(chatId) {
 }
 
 async function sendCatalog(chatId) {
-    try {
-        const books = db.prepare("SELECT id, title, genre_icon FROM mass_stories WHERE status='active' ORDER BY id LIMIT 4").all();
-        let kb = [];
-        for (const b of books) {
-            const row = db.prepare("SELECT COUNT(*) as count FROM mass_votes WHERE story_id=?").get(b.id);
-            kb.push([{ text: `${b.genre_icon} ${b.title} (${row.count} 🗳️)`, callback_data: `read_${b.id}` }]);
-        }
-        kb.push([{ text: '⬅️ Меню', callback_data: 'menu' }]);
-        await bot.sendMessage(chatId, '📚 <b>Каталог историй</b>', { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
-    } catch(e) { console.error('catalog error:', e.message); bot.sendMessage(chatId, '⚠️ Ошибка каталога'); }
+    let kb = [];
+    for (const b of stories) {
+        kb.push([{ text: `${b.icon} ${b.title}`, callback_data: `read_${b.id}` }]);
+    }
+    kb.push([{ text: '⬅️ Меню', callback_data: 'menu' }]);
+    await bot.sendMessage(chatId, '📚 <b>Каталог историй</b>', { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
 }
 
 async function sendChapter(chatId, bookId) {
-    try {
-        const book = db.prepare("SELECT title, genre_icon, description FROM mass_stories WHERE id=? AND status='active'").get(bookId);
-        if (!book) return bot.sendMessage(chatId, '❌ Не найдено');
-        await bot.sendMessage(chatId, `${book.genre_icon} <b>${book.title}</b>\n\n${book.description}`, {
-            parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: [
-                [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
-                [{ text: '⬅️ Каталог', callback_data: 'catalog' }]
-            ]}
-        });
-    } catch(e) { console.error('chapter error:', e.message); }
+    const book = stories.find(s => s.id === bookId);
+    if (!book) return bot.sendMessage(chatId, '❌ Не найдено');
+    await bot.sendMessage(chatId, `${book.icon} <b>${book.title}</b>\n\n${book.desc}`, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [
+            [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
+            [{ text: '⬅️ Каталог', callback_data: 'catalog' }]
+        ]}
+    });
 }
 
 async function sendVoteLink(chatId, bookId) {
@@ -134,8 +93,7 @@ async function sendAuthors(chatId) {
 }
 
 async function sendAuthorRequest(chatId, user) {
-    const notify = `🖊️ <b>Новая заявка!</b>\nИмя: ${user.first_name}\n@${user.username || 'нет'}\nID: ${user.id}`;
-    await bot.sendMessage(ADMIN_ID, notify, { parse_mode: 'HTML' });
+    await bot.sendMessage(ADMIN_ID, `🖊️ Новая заявка!\n${user.first_name}\n@${user.username || 'нет'}\nID: ${user.id}`, { parse_mode: 'HTML' });
     await bot.sendMessage(chatId, '✅ Заявка отправлена!', { parse_mode: 'HTML' });
 }
 
