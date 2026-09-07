@@ -4,7 +4,7 @@ const mysql = require('mysql2/promise');
 const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID || '99933936';
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/PlotPlay_Bot/vote';
-const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlayChat';
+const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlay_Chat';
 
 if (!TOKEN) { console.error('❌ BOT_TOKEN not set'); process.exit(1); }
 
@@ -49,6 +49,10 @@ bot.on('callback_query', async (cb) => {
     try {
         if (data === 'menu') await sendWelcome(chatId);
         else if (data === 'catalog') await sendCatalog(chatId);
+        else if (data.startsWith('read_ch_')) {
+            const parts = data.replace('read_ch_', '').split('_');
+            await sendChapterByNum(chatId, parseInt(parts[0]), parseInt(parts[1]));
+        }
         else if (data.startsWith('read_text_')) await sendReadText(chatId, parseInt(data.replace('read_text_', '')));
         else if (data.startsWith('read_')) await sendChapter(chatId, parseInt(data.replace('read_', '')));
         else if (data.startsWith('vote_')) await sendVoteLink(chatId, parseInt(data.replace('vote_', '')));
@@ -103,20 +107,87 @@ async function sendChapter(chatId, bookId) {
 
 async function sendReadText(chatId, bookId) {
     try {
-        const [[book]] = await pool.query("SELECT title, description FROM mass_stories WHERE id=? AND status='active'", [bookId]);
+        const [[book]] = await pool.query("SELECT title, genre_icon FROM mass_stories WHERE id=? AND status='active'", [bookId]);
         if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
-        // Пока берём описание. Когда добавим mass_chapters — заменим на текст главы
-        const text = book.description || 'Текст главы скоро появится...';
-        await bot.sendMessage(chatId, `📖 <b>${book.title}</b>\n\n${text}`, {
-            parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: [
-                [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
-                [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
-                [{ text: '⬅️ Назад к книге', callback_data: `read_${bookId}` }],
-                [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
-            ]}
-        });
-    } catch(e) { console.error('read error:', e.message); }
+
+        const [[chapter]] = await pool.query(
+            "SELECT chapter_num, title, content, image_url FROM mass_chapters WHERE story_id=? ORDER BY chapter_num ASC LIMIT 1",
+            [bookId]
+        );
+
+        let text = '';
+        let kb = [];
+
+        if (chapter) {
+            const chTitle = chapter.title ? `<b>${chapter.title}</b>\n\n` : '';
+            text = `${book.genre_icon} <b>${book.title}</b>\n\n${chTitle}${chapter.content}`;
+
+            const [[next]] = await pool.query(
+                "SELECT id FROM mass_chapters WHERE story_id=? AND chapter_num>? ORDER BY chapter_num ASC LIMIT 1",
+                [bookId, chapter.chapter_num]
+            );
+            if (next) {
+                kb.push([{ text: '➡️ Следующая глава', callback_data: `read_ch_${bookId}_${chapter.chapter_num + 1}` }]);
+            }
+        } else {
+            text = `${book.genre_icon} <b>${book.title}</b>\n\n📝 Главы пока не добавлены.`;
+        }
+
+        kb.push([
+            { text: '🗳️ Голосовать', callback_data: `vote_${bookId}` },
+            { text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }
+        ]);
+        kb.push([
+            { text: '⬅️ Назад к книге', callback_data: `read_${bookId}` },
+            { text: '⬅️ К каталогу', callback_data: 'catalog' }
+        ]);
+
+        await bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+    } catch(e) { console.error('read error:', e.message); bot.sendMessage(chatId, '⚠️ Ошибка чтения'); }
+}
+
+async function sendChapterByNum(chatId, bookId, chapterNum) {
+    try {
+        const [[book]] = await pool.query("SELECT title, genre_icon FROM mass_stories WHERE id=? AND status='active'", [bookId]);
+        if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
+
+        const [[chapter]] = await pool.query(
+            "SELECT chapter_num, title, content FROM mass_chapters WHERE story_id=? AND chapter_num=?",
+            [bookId, chapterNum]
+        );
+
+        if (!chapter) return bot.sendMessage(chatId, '❌ Глава не найдена');
+
+        const chTitle = chapter.title ? `<b>${chapter.title}</b>\n\n` : '';
+        const text = `${book.genre_icon} <b>${book.title}</b>\n\n${chTitle}${chapter.content}`;
+
+        let kb = [];
+
+        // Предыдущая и следующая главы в одной строке
+        let navRow = [];
+        if (chapterNum > 1) {
+            navRow.push({ text: '⬅️ Предыдущая', callback_data: `read_ch_${bookId}_${chapterNum - 1}` });
+        }
+        const [[next]] = await pool.query(
+            "SELECT id FROM mass_chapters WHERE story_id=? AND chapter_num>? ORDER BY chapter_num ASC LIMIT 1",
+            [bookId, chapterNum]
+        );
+        if (next) {
+            navRow.push({ text: '➡️ Следующая', callback_data: `read_ch_${bookId}_${chapterNum + 1}` });
+        }
+        if (navRow.length > 0) kb.push(navRow);
+
+        kb.push([
+            { text: '🗳️ Голосовать', callback_data: `vote_${bookId}` },
+            { text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }
+        ]);
+        kb.push([
+            { text: '⬅️ Назад к книге', callback_data: `read_${bookId}` },
+            { text: '⬅️ К каталогу', callback_data: 'catalog' }
+        ]);
+
+        await bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+    } catch(e) { console.error('chapter nav error:', e.message); }
 }
 
 async function sendVoteLink(chatId, bookId) {
