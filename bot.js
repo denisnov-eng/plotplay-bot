@@ -46,7 +46,8 @@ if (count === 0) {
 // === БОТ ===
 const bot = new TelegramBot(TOKEN, { polling: true });
 console.log('✅ Bot started (SQLite)');
-
+console.log('🔍 DB file:', dbPath);
+console.log('📊 Stories count:', db.prepare("SELECT COUNT(*) as c FROM mass_stories").get().c);
 bot.on('message', (msg) => {
     console.log(`📨 chat=${msg.chat.id} text="${msg.text}" user=${msg.from?.username}`);
 });
