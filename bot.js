@@ -4,7 +4,7 @@ const mysql = require('mysql2/promise');
 const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID || '99933936';
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/PlotPlay_Bot/vote';
-const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlay_Chat';
+const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlayChat';
 
 if (!TOKEN) { console.error('❌ BOT_TOKEN not set'); process.exit(1); }
 
