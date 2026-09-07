@@ -27,7 +27,15 @@ const bot = new TelegramBot(TOKEN, { polling: true });
 console.log('✅ PlotPlay Bot запущен (Long Polling)');
 
 // === ОБРАБОТКА СООБЩЕНИЙ ===
-bot.onText(/\/start/, (msg) => sendWelcome(msg.chat.id));
+bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id;
+    console.log(`📩 /start from chat_id=${chatId}, user=${msg.from.username || msg.from.first_name}`);
+    try {
+        await sendWelcome(chatId);
+    } catch (err) {
+        console.error('sendWelcome error:', err.message);
+        bot.sendMessage(chatId, '⚠️ Ошибка отправки. Попробуйте позже.');
+    }
 bot.onText(/\/help/, (msg) => {
     bot.sendMessage(msg.chat.id, '❓ <b>Помощь</b>\n\nНажмите /start чтобы вернуться в главное меню.', { parse_mode: 'HTML' });
 });
