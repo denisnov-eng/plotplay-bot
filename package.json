@@ -4,6 +4,7 @@
   "main": "bot.js",
   "scripts": { "start": "node bot.js" },
   "dependencies": {
-    "node-telegram-bot-api": "^0.66.0"
+    "node-telegram-bot-api": "^0.66.0",
+    "mysql2": "^3.11.0"
   }
 }
