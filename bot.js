@@ -71,8 +71,7 @@ async function sendWelcome(chatId) {
         `📚 Читай книги\n🗳️ Голосуй за сюжет\n✍️ Стань автором\n\n` +
         `Нажми «Старт» чтобы начать!`;
 
-    await bot.sendPhoto(chatId, 'https://plotpay.ru/images/welcome.jpg', {
-        caption: text,
+    await bot.sendMessage(chatId, text, {
         parse_mode: 'HTML',
         reply_markup: { inline_keyboard: [
             [{ text: '🚀 Старт', callback_data: 'catalog' }],
