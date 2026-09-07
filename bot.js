@@ -1,24 +1,38 @@
 const TelegramBot = require('node-telegram-bot-api');
+const mysql = require('mysql2/promise');
 
 const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID || '99933936';
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/PlotPlay_Bot/vote';
-const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlayChat';
+const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlay_Chat';
 
 if (!TOKEN) { console.error('❌ BOT_TOKEN not set'); process.exit(1); }
 
-// === ДЕМО-ДАННЫЕ (без базы данных) ===
-const stories = [
-    { id: 1, title: 'Новый директор', icon: '🎭', desc: 'Кто займёт кресло директора? Решаешь ты!' },
-    { id: 2, title: 'Дело №7', icon: '🕵️', desc: 'Загадочное убийство в особняке. Найди виновного.' },
-    { id: 3, title: 'Кровь и Бархат', icon: '🧛', desc: 'Вампирский бал. Чью сторону выберешь?' },
-    { id: 4, title: 'Петля', icon: '🚀', desc: 'Космическая станция теряет связь. Время на исходе.' }
-];
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '3310'),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    charset: 'utf8mb4',
+    waitForConnections: true,
+    connectionLimit: 10
+});
 
 const bot = new TelegramBot(TOKEN, { polling: true });
-console.log('✅ Bot started (NO DB)');
+console.log('✅ Bot started (MySQL)');
 
-// === ОБРАБОТЧИКИ КОМАНД ===
+// === ПРОВЕРКА ПОДКЛЮЧЕНИЯ К БД ===
+(async () => {
+    try {
+        const [rows] = await pool.query("SELECT COUNT(*) as c FROM mass_stories WHERE status='active'");
+        console.log(`✅ DB connected. Active stories: ${rows[0].c}`);
+    } catch (e) {
+        console.error('❌ DB error:', e.message);
+    }
+})();
+
+// === КОМАНДЫ ===
 bot.onText(/\/start/, async (msg) => {
     try { await sendWelcome(msg.chat.id); } catch(e) { console.error('start err:', e.message); }
 });
@@ -27,7 +41,7 @@ bot.onText(/\/help/, (msg) => {
     bot.sendMessage(msg.chat.id, '❓ <b>Помощь</b>\n\nНажмите /start чтобы вернуться в главное меню.', { parse_mode: 'HTML' });
 });
 
-// === ОБРАБОТЧИК CALLBACK ЗАПРОСОВ ===
+// === CALLBACK ЗАПРОСЫ ===
 bot.on('callback_query', async (cb) => {
     const data = cb.data;
     const chatId = cb.message.chat.id;
@@ -44,7 +58,7 @@ bot.on('callback_query', async (cb) => {
     } catch(err) { console.error('CB error:', err.message); }
 });
 
-// === ФУНКЦИИ ОТПРАВКИ ===
+// === ФУНКЦИИ ===
 
 async function sendWelcome(chatId) {
     await bot.sendMessage(chatId,
@@ -58,57 +72,65 @@ async function sendWelcome(chatId) {
 }
 
 async function sendCatalog(chatId) {
-    let kb = [];
-    for (const b of stories) {
-        kb.push([{ text: `${b.icon} ${b.title}`, callback_data: `read_${b.id}` }]);
-    }
-    kb.push([{ text: '⬅️ Меню', callback_data: 'menu' }]);
-    await bot.sendMessage(chatId, '📚 <b>Каталог историй</b>\n\nВыберите книгу:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+    try {
+        const [books] = await pool.query("SELECT id, title, genre_icon FROM mass_stories WHERE status='active' ORDER BY id");
+        let kb = [];
+        for (const b of books) {
+            const [[{count}]] = await pool.query("SELECT COUNT(*) as count FROM mass_votes WHERE story_id=?", [b.id]);
+            kb.push([{ text: `${b.genre_icon} ${b.title} (${count} 🗳️)`, callback_data: `read_${b.id}` }]);
+        }
+        if (kb.length === 0) return bot.sendMessage(chatId, '📚 Каталог пуст. Скоро появятся новые истории!', { parse_mode: 'HTML' });
+        kb.push([{ text: '⬅️ Меню', callback_data: 'menu' }]);
+        await bot.sendMessage(chatId, '📚 <b>Каталог историй</b>\n\nВыберите книгу:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+    } catch(e) { console.error('catalog error:', e.message); bot.sendMessage(chatId, '⚠️ Ошибка каталога'); }
 }
 
 async function sendChapter(chatId, bookId) {
-    const book = stories.find(s => s.id === bookId);
-    if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
-
-    const text = `${book.icon} <b>${book.title}</b>\n\n${book.desc}`;
-
-    await bot.sendMessage(chatId, text, {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [
-            [{ text: '📖 Читать', callback_data: `read_text_${bookId}` }],
-            [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
-            [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
-            [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
-        ]}
-    });
+    try {
+        const [[book]] = await pool.query("SELECT title, genre_icon, description FROM mass_stories WHERE id=? AND status='active'", [bookId]);
+        if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
+        await bot.sendMessage(chatId, `${book.genre_icon} <b>${book.title}</b>\n\n${book.description}`, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: [
+                [{ text: '📖 Читать', callback_data: `read_text_${bookId}` }],
+                [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
+                [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
+                [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
+            ]}
+        });
+    } catch(e) { console.error('chapter error:', e.message); }
 }
 
 async function sendReadText(chatId, bookId) {
-    const book = stories.find(s => s.id === bookId);
-    if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
-
-    // Пока текст берётся из описания. Когда подключим БД — будем брать из mass_chapters
-    const chapterText = book.desc || 'Текст главы скоро появится...';
-
-    await bot.sendMessage(chatId, `📖 <b>${book.title}</b>\n\n${chapterText}`, {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [
-            [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
-            [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
-            [{ text: '⬅️ Назад к книге', callback_data: `read_${bookId}` }],
-            [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
-        ]}
-    });
+    try {
+        const [[book]] = await pool.query("SELECT title, description FROM mass_stories WHERE id=? AND status='active'", [bookId]);
+        if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
+        // Пока берём описание. Когда добавим mass_chapters — заменим на текст главы
+        const text = book.description || 'Текст главы скоро появится...';
+        await bot.sendMessage(chatId, `📖 <b>${book.title}</b>\n\n${text}`, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: [
+                [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
+                [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
+                [{ text: '⬅️ Назад к книге', callback_data: `read_${bookId}` }],
+                [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
+            ]}
+        });
+    } catch(e) { console.error('read error:', e.message); }
 }
 
 async function sendVoteLink(chatId, bookId) {
-    await bot.sendMessage(chatId, '🗳️ <b>Голосование открыто!</b>\n\n💰 1 🔑 или 49₽\n⏳ 72 часа', {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [
-            [{ text: '🗳️ Открыть голосование', url: WEBAPP_URL }],
-            [{ text: '⬅️ К главе', callback_data: `read_${bookId}` }]
-        ]}
-    });
+    try {
+        const [[book]] = await pool.query("SELECT price_rub FROM mass_stories WHERE id=?", [bookId]);
+        const price = book ? book.price_rub : 49;
+        await bot.sendMessage(chatId, `🗳️ <b>Голосование открыто!</b>\n\n💰 ${price}₽\n⏳ 72 часа`, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: [
+                [{ text: '🗳️ Открыть голосование', url: WEBAPP_URL }],
+                [{ text: '⬅️ К главе', callback_data: `read_${bookId}` }]
+            ]}
+        });
+    } catch(e) { console.error('vote error:', e.message); }
 }
 
 async function sendAuthors(chatId) {
@@ -128,11 +150,14 @@ async function sendAuthorRequest(chatId, user) {
 }
 
 async function sendSeason1(chatId) {
-    await bot.sendMessage(chatId, '🎬 <b>Сезон 1</b>\n\n🎭 Новый директор\n🕵️ Дело №7\n🧛 Кровь и Бархат\n🚀 Петля\n\nГолосование: 72 часа', {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: '📚 К книгам', callback_data: 'catalog' }]] }
-    });
+    try {
+        const [books] = await pool.query("SELECT genre_icon, title FROM mass_stories WHERE status='active' ORDER BY id LIMIT 4");
+        let list = books.map(b => `${b.genre_icon} ${b.title}`).join('\n');
+        await bot.sendMessage(chatId, `🎬 <b>Сезон 1</b>\n\n${list}\n\nГолосование: 72 часа`, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: [[{ text: '📚 К книгам', callback_data: 'catalog' }]] }
+        });
+    } catch(e) { console.error('season error:', e.message); }
 }
 
-// === ОБРАБОТКА ОШИБОК ===
 bot.on('polling_error', (err) => console.error('Polling error:', err.message));
