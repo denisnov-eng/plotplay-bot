@@ -7,7 +7,6 @@ const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID || '99933936';
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/PlotPlay_Bot/vote';
 const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlay_Chat';
-
 if (!TOKEN) { console.error('❌ BOT_TOKEN not set'); process.exit(1); }
 
 const pool = mysql.createPool({
