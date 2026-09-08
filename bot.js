@@ -421,14 +421,15 @@ async function sendVoteLink(chatId, bookId) {
 
         const price = voteInfo.price_rub || 49;
         
-        // Используем t.me ссылку и обычную url кнопку
-        const webAppUrl = `https://t.me/PlotPlay_Bot/vote?book=${bookId}`;
+        // ⚠️ ВАЖНО: Укажите здесь ТОЧНЫЙ путь к HTML файлу Web App на вашем сайте.
+        // Если файл лежит в корне: https://plotpay.ru/
+        // Если в папке webapp: https://plotpay.ru/webapp/index.html
+        const webAppUrl = `https://plotpay.ru/?book=${bookId}`;
 
         await bot.sendMessage(chatId, `🗳️ <b>Голосование</b>`, {
             parse_mode: 'HTML',
             reply_markup: {
                 inline_keyboard: [
-                    // ВАЖНО: используем 'url', а не 'web_app'
                     [{ text: `🗳️ Голосовать (${price}₽)`, url: webAppUrl }],
                     [{ text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }]
                 ]
