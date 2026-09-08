@@ -184,7 +184,9 @@ async function sendCatalog(chatId) {
         if (books.length === 0) {
             return bot.sendMessage(chatId, '📚 Каталог пуст. Скоро появятся новые истории!', { parse_mode: 'HTML' });
         }
-
+// 1. Заголовок отдельным сообщением
+        await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
+        
         for (const b of books) {
             const [[{count}]] = await pool.query("SELECT COUNT(*) as count FROM mass_votes WHERE story_id=?", [b.id]);
             const rating = count || 0;
@@ -215,7 +217,7 @@ async function sendCatalog(chatId) {
             }
         }
 
-        await bot.sendMessage(chatId, '📚 Выберите книгу:', {
+        await bot.sendMessage(chatId, '', {
             reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
         });
 
