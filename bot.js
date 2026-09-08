@@ -78,6 +78,7 @@ async function sendLongMessage(chatId, text, parseMode, replyMarkup) {
     }
 }
 
+// === КОМАНДЫ ===
 bot.onText(/\/start/, async (msg) => {
     try { await sendWelcome(msg.chat.id); } catch(e) { console.error('start err:', e.message); }
 });
@@ -92,6 +93,7 @@ bot.onText(/\/help/, (msg) => {
     });
 });
 
+// === ОБРАБОТЧИК ТЕКСТОВЫХ СООБЩЕНИЙ ===
 bot.on('message', async (msg) => {
     if (!msg.text || msg.text.startsWith('/')) return;
     const chatId = msg.chat.id;
@@ -110,6 +112,7 @@ bot.on('message', async (msg) => {
     }
 });
 
+// === CALLBACK ЗАПРОСЫ ===
 bot.on('callback_query', async (cb) => {
     const data = cb.data;
     const chatId = cb.message.chat.id;
@@ -127,10 +130,12 @@ bot.on('callback_query', async (cb) => {
         else if (data === 'authors') await sendAuthors(chatId);
         else if (data === 'want_author') await sendAuthorRequest(chatId, cb.from);
         else if (data === 'ask_question') await askQuestion(chatId);
-                else if (data === 'i_am_author') await sendAuthorInfo(chatId);    
+        else if (data === 'i_am_author') await sendAuthorInfo(chatId);
         else if (data === 'season1') await sendSeason1(chatId);
     } catch(err) { console.error('CB error:', err.message); }
 });
+
+// === ФУНКЦИИ ===
 
 async function sendWelcome(chatId) {
     const welcomeText = `🎭 <b>Добро пожаловать в PlotPlay!</b>
@@ -180,6 +185,7 @@ async function askQuestion(chatId) {
     await bot.sendMessage(chatId, '✉️ <b>Напишите ваш вопрос одним сообщением:</b>\n\n(Отправьте текст, и он будет передан администратору)', { parse_mode: 'HTML' });
     userStates[chatId] = 'waiting_question';
 }
+
 async function sendAuthorInfo(chatId) {
     const authorText = `<b>PlotPlay запускает первый сезон интерактивных книг в Telegram</b> — и ищет 7 авторов для 7 книг разных жанров.
 
@@ -220,9 +226,10 @@ async function sendAuthorInfo(chatId) {
         ]
     });
 }
+
 async function sendCatalog(chatId) {
     try {
-        const [books] = await pool.query("SELECT id, title, genre_icon FROM mass_stories WHERE status='active' ORDER BY id");
+        const [books] = await pool.query("SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id");
 
         if (books.length === 0) {
             await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
@@ -233,29 +240,10 @@ async function sendCatalog(chatId) {
         // 1. Заголовок
         await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
 
-        // 2. Кнопки книг + меню внизу
-        let kb = [];
+        // 2. Карточки книг: название + картинка + рейтинг + подробнее
         for (const b of books) {
             const [voteRows] = await pool.query("SELECT COUNT(*) as cnt FROM mass_votes WHERE story_id=?", [b.id]);
             const rating = (voteRows && voteRows[0]) ? voteRows[0].cnt : 0;
-            kb.push([{ text: `${b.genre_icon} ${b.title} (${rating} 🗳️)`, callback_data: `read_${b.id}` }]);
-        }
-        kb.push([{ text: '⬅️ Меню', callback_data: 'menu' }]);
-
-        // Отправляем кнопки с точкой вместо эмодзи (Telegram требует непустой текст)
-        await bot.sendMessage(chatId, '.', { reply_markup: { inline_keyboard: kb } });
-
-    } catch(e) {
-        console.error('catalog error:', e.message);
-        bot.sendMessage(chatId, '⚠️ Ошибка каталога');
-    }
-}
-// 1. Заголовок отдельным сообщением
-        await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
-        
-        for (const b of books) {
-            const [[{count}]] = await pool.query("SELECT COUNT(*) as count FROM mass_votes WHERE story_id=?", [b.id]);
-            const rating = count || 0;
             const caption = `${b.genre_icon} <b>${b.title}</b>\n⭐ Рейтинг: ${rating} голосов`;
 
             const kb = { inline_keyboard: [[{ text: '📖 Подробнее', callback_data: `read_${b.id}` }]] };
@@ -283,7 +271,8 @@ async function sendCatalog(chatId) {
             }
         }
 
-        await bot.sendMessage(chatId, '', {
+        // 3. Кнопка меню внизу
+        await bot.sendMessage(chatId, '.', {
             reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
         });
 
@@ -293,51 +282,46 @@ async function sendCatalog(chatId) {
     }
 }
 
-async function sendCatalog(chatId) {
+async function sendChapter(chatId, bookId) {
     try {
-        const [books] = await pool.query("SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id");
+        const [[book]] = await pool.query("SELECT title, genre_icon, description, image_url FROM mass_stories WHERE id=? AND status='active'", [bookId]);
+        if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
 
-        if (books.length === 0) {
-            await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
-            await bot.sendMessage(chatId, 'Каталог пуст. Скоро появятся новые истории!');
-            return;
+        const kb = { inline_keyboard: [
+            [{ text: '📖 Читать', callback_data: `read_text_${bookId}` }],
+            [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
+            [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
+            [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
+        ]};
+
+        const caption = `${book.genre_icon} <b>${book.title}</b>\n\n${book.description || ''}`;
+
+        // Используем превью вместо оригинальной обложки
+        let imgUrl = null;
+        if (book.image_url && book.image_url.trim() !== '') {
+            imgUrl = `https://plotpay.ru/images/thumbs/thumb_${bookId}.jpg`;
         }
 
-        // 1. Заголовок
-        await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
-
-        // 2. Кнопки выбора книг
-        let kb = [];
-        for (const b of books) {
-            const [voteRows] = await pool.query("SELECT COUNT(*) as cnt FROM mass_votes WHERE story_id=?", [b.id]);
-            const rating = (voteRows && voteRows[0]) ? voteRows[0].cnt : 0;
-            kb.push([{ text: `${b.genre_icon} ${b.title} (${rating} 🗳️)`, callback_data: `read_${b.id}` }]);
-        }
-        await bot.sendMessage(chatId, '👇', { reply_markup: { inline_keyboard: kb } });
-
-        // 3. Превью обложек
-        for (const b of books) {
-            if (!b.image_url) continue;
-            const thumbUrl = `https://plotpay.ru/images/thumbs/thumb_${b.id}.jpg`;
+        if (imgUrl) {
             try {
-                const imgBuffer = await downloadImage(thumbUrl);
+                console.log('📷 Downloading chapter photo:', imgUrl);
+                const imgBuffer = await downloadImage(imgUrl);
                 await bot.sendPhoto(chatId, imgBuffer, {
-                    caption: `${b.genre_icon} ${b.title}`,
-                    filename: `thumb_${b.id}.jpg`
+                    caption: caption,
+                    parse_mode: 'HTML',
+                    reply_markup: kb,
+                    filename: `cover_${bookId}.jpg`
                 });
-            } catch (e) {
-                console.error(`Thumb failed for ${b.title}:`, e.message);
+            } catch (photoErr) {
+                console.error('Chapter photo failed:', photoErr.message);
+                await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
             }
+        } else {
+            await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
         }
-
-        // 4. Кнопка меню
-        await bot.sendMessage(chatId, ' ', {
-            reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
-        });
-
     } catch(e) {
-        console.error('catalog error:', e.message);
-        bot.sendMessage(chatId, '⚠️ Ошибка каталога');
+        console.error('chapter error:', e.message);
+        bot.sendMessage(chatId, '⚠️ Ошибка загрузки книги. Попробуйте позже.');
     }
 }
 
