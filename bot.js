@@ -193,43 +193,56 @@ async function askQuestion(chatId) {
 
 async function sendCatalog(chatId) {
     try {
-        const [books] = await pool.query("SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id");
+        const [books] = await pool.query(
+            "SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id"
+        );
 
         if (books.length === 0) {
             return bot.sendMessage(chatId, '📚 Каталог пуст. Скоро появятся новые истории!', { parse_mode: 'HTML' });
         }
 
-        // Отправляем превью каждой книги
         for (const b of books) {
             const [[{count}]] = await pool.query("SELECT COUNT(*) as count FROM mass_votes WHERE story_id=?", [b.id]);
             const rating = count || 0;
-
-            const caption = `${b.genre_icon} <b>${b.title}</b>\n\n⭐ Рейтинг: ${rating} голосов`;
+            const caption = `${b.genre_icon} <b>${b.title}</b>\n⭐ Рейтинг: ${rating} голосов`;
 
             const kb = { inline_keyboard: [
                 [{ text: '📖 Подробнее', callback_data: `read_${b.id}` }]
             ]};
 
-            if (b.image_url && b.image_url.trim() !== '') {
-                let imgUrl = b.image_url;
-                if (imgUrl.startsWith('/')) {
-                    imgUrl = 'https://plotpay.ru' + imgUrl;
-                }
+            // Пробуем отправить превью
+            const thumbUrl = `https://plotpay.ru/images/thumbs/thumb_${b.id}.jpg`;
+            let sent = false;
+
+            if (b.image_url) {
                 try {
-                    const imgBuffer = await downloadImage(imgUrl);
+                    const imgBuffer = await downloadImage(thumbUrl);
                     await bot.sendPhoto(chatId, imgBuffer, {
                         caption: caption,
                         parse_mode: 'HTML',
-                        reply_markup: kb
+                        reply_markup: kb,
+                        filename: `book_${b.id}.jpg`
                     });
+                    sent = true;
                 } catch (e) {
-                    console.error(`Catalog photo failed for ${b.title}:`, e.message);
-                    await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
+                    console.error(`Thumb failed for ${b.title}:`, e.message);
                 }
-            } else {
+            }
+
+            if (!sent) {
                 await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
             }
         }
+
+        await bot.sendMessage(chatId, '⬅️ Вернуться в меню', {
+            reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
+        });
+
+    } catch(e) {
+        console.error('catalog error:', e.message);
+        bot.sendMessage(chatId, '⚠️ Ошибка каталога');
+    }
+}
 
         // Кнопка меню в конце
         await bot.sendMessage(chatId, '⬅️ Вернуться в меню', {
