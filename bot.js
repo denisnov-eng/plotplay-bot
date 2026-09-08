@@ -222,11 +222,34 @@ async function sendAuthorInfo(chatId) {
 }
 async function sendCatalog(chatId) {
     try {
-        const [books] = await pool.query("SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id");
+        const [books] = await pool.query("SELECT id, title, genre_icon FROM mass_stories WHERE status='active' ORDER BY id");
 
         if (books.length === 0) {
-            return bot.sendMessage(chatId, '📚 Каталог пуст. Скоро появятся новые истории!', { parse_mode: 'HTML' });
+            await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
+            await bot.sendMessage(chatId, 'Каталог пуст. Скоро появятся новые истории!');
+            return;
         }
+
+        // 1. Заголовок
+        await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
+
+        // 2. Кнопки книг + меню внизу
+        let kb = [];
+        for (const b of books) {
+            const [voteRows] = await pool.query("SELECT COUNT(*) as cnt FROM mass_votes WHERE story_id=?", [b.id]);
+            const rating = (voteRows && voteRows[0]) ? voteRows[0].cnt : 0;
+            kb.push([{ text: `${b.genre_icon} ${b.title} (${rating} 🗳️)`, callback_data: `read_${b.id}` }]);
+        }
+        kb.push([{ text: '⬅️ Меню', callback_data: 'menu' }]);
+
+        // Отправляем кнопки с точкой вместо эмодзи (Telegram требует непустой текст)
+        await bot.sendMessage(chatId, '.', { reply_markup: { inline_keyboard: kb } });
+
+    } catch(e) {
+        console.error('catalog error:', e.message);
+        bot.sendMessage(chatId, '⚠️ Ошибка каталога');
+    }
+}
 // 1. Заголовок отдельным сообщением
         await bot.sendMessage(chatId, '📚 <b>Выберите книгу:</b>', { parse_mode: 'HTML' });
         
