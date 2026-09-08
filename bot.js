@@ -110,14 +110,52 @@ bot.on('callback_query', async (cb) => {
 // === ФУНКЦИИ ===
 
 async function sendWelcome(chatId) {
-    await bot.sendMessage(chatId,
-        '👋 <b>Добро пожаловать в PlotPlay!</b>\n\nИнтерактивные истории, где ТЫ решаешь судьбу персонажей.\n\n📚 Читай книги\n🗳️ Голосуй за сюжет\n✍️ Стань автором',
-        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
-            [{ text: '🚀 Старт', callback_data: 'catalog' }],
-            [{ text: '🎬 Сезон 1', callback_data: 'season1' }],
-            [{ text: '🔍 Поиск авторов', callback_data: 'authors' }]
-        ]}}
-    );
+    const welcomeText = `🎭 <b>Добро пожаловать в PlotPlay!</b>
+
+Здесь ты не просто читаешь — ты решаешь, чем закончится история.
+
+7 авторов. 7 книг. 7 жанров.
+И только ТВОЙ голос определяет, что будет дальше.
+
+⚡ <b>Как это работает:</b>
+
+📖 Читай новую главу
+🔀 В конце — выбор: как поступит герой?
+⏳ У тебя 72 часа, чтобы проголосовать
+✍️ Автор пишет продолжение по итогам голосования
+
+Каждый голос — это 1 шаг, который меняет судьбу персонажа. Чем больше голосов — тем сильнее твой выбор.
+
+🏆 <b>Сезон 1 уже стартовал!</b>
+Призовой фонд: 40 000₽ для лучших авторов.
+
+💎 1 голос = 49₽
+💎 Пакет 10 голосов = 199₽ (выгода 59%!)
+
+Ты готов к приключениям?`;
+
+    const kb = { inline_keyboard: [
+        [{ text: '🚀 Старт', callback_data: 'catalog' }]
+    ]};
+
+    // Приветственная картинка (замените URL на свою)
+    const welcomeImg = 'https://plotpay.ru/images/welcome.jpg';
+
+    try {
+        const imgBuffer = await downloadImage(welcomeImg);
+        await bot.sendPhoto(chatId, imgBuffer, {
+            caption: welcomeText,
+            parse_mode: 'HTML',
+            reply_markup: kb
+        });
+    } catch (e) {
+        console.error('Welcome photo failed:', e.message);
+        // Fallback: текст без картинки
+        await bot.sendMessage(chatId, welcomeText, {
+            parse_mode: 'HTML',
+            reply_markup: kb
+        });
+    }
 }
 
 async function sendCatalog(chatId) {
