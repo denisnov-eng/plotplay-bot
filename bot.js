@@ -410,22 +410,31 @@ async function sendChapterByNum(chatId, bookId, chapterNum) {
 
 async function sendVoteLink(chatId, bookId) {
     try {
-        const [[voteInfo]] = await pool.query("SELECT price_rub FROM mass_stories WHERE id=?", [bookId]);
-        if (!voteInfo) return bot.sendMessage(chatId, '❌ Книга не найдена');
+        const [[voteInfo]] = await pool.query(
+            "SELECT price_rub FROM mass_stories WHERE id=?",
+            [bookId]
+        );
+
+        if (!voteInfo) {
+            return bot.sendMessage(chatId, '❌ Книга не найдена');
+        }
 
         const price = voteInfo.price_rub || 49;
-        const webAppUrl = `https://t.me/PlotPlay_Bot/vote?book=${bookId}`; // Возвращаем t.me ссылку
+        
+        // Используем t.me ссылку и обычную url кнопку
+        const webAppUrl = `https://t.me/PlotPlay_Bot/vote?book=${bookId}`;
 
         await bot.sendMessage(chatId, `🗳️ <b>Голосование</b>`, {
             parse_mode: 'HTML',
             reply_markup: {
                 inline_keyboard: [
-                    // Используем обычную url кнопку
-                    [{ text: `🗳️ Открыть голосование (${price}₽)`, url: webAppUrl }],
+                    // ВАЖНО: используем 'url', а не 'web_app'
+                    [{ text: `🗳️ Голосовать (${price}₽)`, url: webAppUrl }],
                     [{ text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }]
                 ]
             }
         });
+
     } catch(e) {
         console.error('vote error:', e.message);
         bot.sendMessage(chatId, '⚠️ Ошибка открытия голосования');
