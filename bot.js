@@ -25,10 +25,8 @@ const pool = mysql.createPool({
 const bot = new TelegramBot(TOKEN, { polling: true });
 console.log('✅ Bot started (MySQL)');
 
-// === СОСТОЯНИЯ ПОЛЬЗОВАТЕЛЕЙ ===
 const userStates = {};
 
-// === ПРОВЕРКА ПОДКЛЮЧЕНИЯ К БД ===
 (async () => {
     try {
         const [rows] = await pool.query("SELECT COUNT(*) as c FROM mass_stories WHERE status='active'");
@@ -38,7 +36,6 @@ const userStates = {};
     }
 })();
 
-// === ЗАГРУЗКА КАРТИНОК ЧЕРЕЗ БУФЕР ===
 function downloadImage(url) {
     return new Promise((resolve, reject) => {
         const client = url.startsWith('https') ? https : http;
@@ -57,7 +54,6 @@ function downloadImage(url) {
     });
 }
 
-// === РАЗБИЕНИЕ ДЛИННЫХ СООБЩЕНИЙ ===
 async function sendLongMessage(chatId, text, parseMode, replyMarkup) {
     const MAX_LEN = 4000;
     if (text.length <= MAX_LEN) {
@@ -82,7 +78,6 @@ async function sendLongMessage(chatId, text, parseMode, replyMarkup) {
     }
 }
 
-// === КОМАНДЫ ===
 bot.onText(/\/start/, async (msg) => {
     try { await sendWelcome(msg.chat.id); } catch(e) { console.error('start err:', e.message); }
 });
@@ -97,11 +92,9 @@ bot.onText(/\/help/, (msg) => {
     });
 });
 
-// === ОБРАБОТЧИК ТЕКСТОВЫХ СООБЩЕНИЙ (ВОПРОСЫ) ===
 bot.on('message', async (msg) => {
     if (!msg.text || msg.text.startsWith('/')) return;
     const chatId = msg.chat.id;
-
     if (userStates[chatId] === 'waiting_question') {
         delete userStates[chatId];
         const question = msg.text;
@@ -117,7 +110,6 @@ bot.on('message', async (msg) => {
     }
 });
 
-// === CALLBACK ЗАПРОСЫ ===
 bot.on('callback_query', async (cb) => {
     const data = cb.data;
     const chatId = cb.message.chat.id;
@@ -138,8 +130,6 @@ bot.on('callback_query', async (cb) => {
         else if (data === 'season1') await sendSeason1(chatId);
     } catch(err) { console.error('CB error:', err.message); }
 });
-
-// === ФУНКЦИИ ===
 
 async function sendWelcome(chatId) {
     const welcomeText = `🎭 <b>Добро пожаловать в PlotPlay!</b>
@@ -166,23 +156,19 @@ async function sendWelcome(chatId) {
 
 Ты готов к приключениям?`;
 
-    const kb = { inline_keyboard: [
-        [{ text: '🚀 Старт', callback_data: 'catalog' }]
-    ]};
+    const kb = { inline_keyboard: [[{ text: '🚀 Старт', callback_data: 'catalog' }]] };
 
     try {
         const imgBuffer = await downloadImage(WELCOME_IMG);
         await bot.sendPhoto(chatId, imgBuffer, {
             caption: welcomeText,
             parse_mode: 'HTML',
-            reply_markup: kb
+            reply_markup: kb,
+            filename: 'welcome.jpg'
         });
     } catch (e) {
         console.error('Welcome photo failed:', e.message);
-        await bot.sendMessage(chatId, welcomeText, {
-            parse_mode: 'HTML',
-            reply_markup: kb
-        });
+        await bot.sendMessage(chatId, welcomeText, { parse_mode: 'HTML', reply_markup: kb });
     }
 }
 
@@ -193,9 +179,7 @@ async function askQuestion(chatId) {
 
 async function sendCatalog(chatId) {
     try {
-        const [books] = await pool.query(
-            "SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id"
-        );
+        const [books] = await pool.query("SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id");
 
         if (books.length === 0) {
             return bot.sendMessage(chatId, '📚 Каталог пуст. Скоро появятся новые истории!', { parse_mode: 'HTML' });
@@ -206,9 +190,7 @@ async function sendCatalog(chatId) {
             const rating = count || 0;
             const caption = `${b.genre_icon} <b>${b.title}</b>\n⭐ Рейтинг: ${rating} голосов`;
 
-            const kb = { inline_keyboard: [
-                [{ text: '📖 Подробнее', callback_data: `read_${b.id}` }]
-            ]};
+            const kb = { inline_keyboard: [[{ text: '📖 Подробнее', callback_data: `read_${b.id}` }]] };
 
             const thumbUrl = `https://plotpay.ru/images/thumbs/thumb_${b.id}.jpg`;
             let sent = false;
@@ -243,17 +225,6 @@ async function sendCatalog(chatId) {
     }
 }
 
-        // Кнопка меню в конце
-        await bot.sendMessage(chatId, '⬅️ Вернуться в меню', {
-            reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
-        });
-
-    } catch(e) {
-        console.error('catalog error:', e.message);
-        bot.sendMessage(chatId, '⚠️ Ошибка каталога');
-    }
-}
-
 async function sendChapter(chatId, bookId) {
     try {
         const [[book]] = await pool.query("SELECT title, genre_icon, description, image_url FROM mass_stories WHERE id=? AND status='active'", [bookId]);
@@ -270,16 +241,15 @@ async function sendChapter(chatId, bookId) {
 
         if (book.image_url && book.image_url.trim() !== '') {
             let imgUrl = book.image_url;
-            if (imgUrl.startsWith('/')) {
-                imgUrl = 'https://plotpay.ru' + imgUrl;
-            }
+            if (imgUrl.startsWith('/')) imgUrl = 'https://plotpay.ru' + imgUrl;
             try {
                 console.log('📷 Downloading photo:', imgUrl);
                 const imgBuffer = await downloadImage(imgUrl);
                 await bot.sendPhoto(chatId, imgBuffer, {
                     caption: caption,
                     parse_mode: 'HTML',
-                    reply_markup: kb
+                    reply_markup: kb,
+                    filename: 'cover.jpg'
                 });
             } catch (photoErr) {
                 console.error('Photo send failed:', photoErr.message);
