@@ -193,16 +193,53 @@ async function askQuestion(chatId) {
 
 async function sendCatalog(chatId) {
     try {
-        const [books] = await pool.query("SELECT id, title, genre_icon FROM mass_stories WHERE status='active' ORDER BY id");
-        let kb = [];
+        const [books] = await pool.query("SELECT id, title, genre_icon, image_url FROM mass_stories WHERE status='active' ORDER BY id");
+
+        if (books.length === 0) {
+            return bot.sendMessage(chatId, '📚 Каталог пуст. Скоро появятся новые истории!', { parse_mode: 'HTML' });
+        }
+
+        // Отправляем превью каждой книги
         for (const b of books) {
             const [[{count}]] = await pool.query("SELECT COUNT(*) as count FROM mass_votes WHERE story_id=?", [b.id]);
-            kb.push([{ text: `${b.genre_icon} ${b.title} (${count} 🗳️)`, callback_data: `read_${b.id}` }]);
+            const rating = count || 0;
+
+            const caption = `${b.genre_icon} <b>${b.title}</b>\n\n⭐ Рейтинг: ${rating} голосов`;
+
+            const kb = { inline_keyboard: [
+                [{ text: '📖 Подробнее', callback_data: `read_${b.id}` }]
+            ]};
+
+            if (b.image_url && b.image_url.trim() !== '') {
+                let imgUrl = b.image_url;
+                if (imgUrl.startsWith('/')) {
+                    imgUrl = 'https://plotpay.ru' + imgUrl;
+                }
+                try {
+                    const imgBuffer = await downloadImage(imgUrl);
+                    await bot.sendPhoto(chatId, imgBuffer, {
+                        caption: caption,
+                        parse_mode: 'HTML',
+                        reply_markup: kb
+                    });
+                } catch (e) {
+                    console.error(`Catalog photo failed for ${b.title}:`, e.message);
+                    await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
+                }
+            } else {
+                await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
+            }
         }
-        if (kb.length === 0) return bot.sendMessage(chatId, '📚 Каталог пуст. Скоро появятся новые истории!', { parse_mode: 'HTML' });
-        kb.push([{ text: '⬅️ Меню', callback_data: 'menu' }]);
-        await bot.sendMessage(chatId, '📚 <b>Каталог историй</b>\n\nВыберите книгу:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
-    } catch(e) { console.error('catalog error:', e.message); bot.sendMessage(chatId, '⚠️ Ошибка каталога'); }
+
+        // Кнопка меню в конце
+        await bot.sendMessage(chatId, '⬅️ Вернуться в меню', {
+            reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
+        });
+
+    } catch(e) {
+        console.error('catalog error:', e.message);
+        bot.sendMessage(chatId, '⚠️ Ошибка каталога');
+    }
 }
 
 async function sendChapter(chatId, bookId) {
