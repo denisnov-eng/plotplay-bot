@@ -210,7 +210,6 @@ async function sendCatalog(chatId) {
                 [{ text: '📖 Подробнее', callback_data: `read_${b.id}` }]
             ]};
 
-            // Пробуем отправить превью
             const thumbUrl = `https://plotpay.ru/images/thumbs/thumb_${b.id}.jpg`;
             let sent = false;
 
@@ -234,7 +233,7 @@ async function sendCatalog(chatId) {
             }
         }
 
-                await bot.sendMessage(chatId, '📚 Выберите книгу:', {
+        await bot.sendMessage(chatId, '📚 Выберите книгу:', {
             reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
         });
 
