@@ -32,6 +32,31 @@ console.log('✅ Bot started (MySQL)');
     }
 })();
 
+// === РАЗБИЕНИЕ ДЛИННЫХ СООБЩЕНИЙ ===
+async function sendLongMessage(chatId, text, parseMode, replyMarkup) {
+    const MAX_LEN = 4000;
+    if (text.length <= MAX_LEN) {
+        await bot.sendMessage(chatId, text, { parse_mode: parseMode, reply_markup: replyMarkup });
+        return;
+    }
+    const parts = [];
+    let remaining = text;
+    while (remaining.length > 0) {
+        if (remaining.length <= MAX_LEN) {
+            parts.push(remaining);
+            break;
+        }
+        let cut = remaining.lastIndexOf('\n', MAX_LEN);
+        if (cut < 100) cut = MAX_LEN;
+        parts.push(remaining.substring(0, cut));
+        remaining = remaining.substring(cut).trimStart();
+    }
+    for (let i = 0; i < parts.length; i++) {
+        const kb = (i === parts.length - 1) ? replyMarkup : undefined;
+        await bot.sendMessage(chatId, parts[i], { parse_mode: parseMode, reply_markup: kb });
+    }
+}
+
 // === КОМАНДЫ ===
 bot.onText(/\/start/, async (msg) => {
     try { await sendWelcome(msg.chat.id); } catch(e) { console.error('start err:', e.message); }
@@ -111,7 +136,7 @@ async function sendReadText(chatId, bookId) {
         if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
 
         const [[chapter]] = await pool.query(
-            "SELECT chapter_num, title, content, image_url FROM mass_chapters WHERE story_id=? ORDER BY chapter_num ASC LIMIT 1",
+            "SELECT chapter_num, title, content FROM mass_chapters WHERE story_id=? ORDER BY chapter_num ASC LIMIT 1",
             [bookId]
         );
 
@@ -142,7 +167,7 @@ async function sendReadText(chatId, bookId) {
             { text: '⬅️ К каталогу', callback_data: 'catalog' }
         ]);
 
-        await bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+        await sendLongMessage(chatId, text, 'HTML', { inline_keyboard: kb });
     } catch(e) { console.error('read error:', e.message); bot.sendMessage(chatId, '⚠️ Ошибка чтения'); }
 }
 
@@ -162,8 +187,6 @@ async function sendChapterByNum(chatId, bookId, chapterNum) {
         const text = `${book.genre_icon} <b>${book.title}</b>\n\n${chTitle}${chapter.content}`;
 
         let kb = [];
-
-        // Предыдущая и следующая главы в одной строке
         let navRow = [];
         if (chapterNum > 1) {
             navRow.push({ text: '⬅️ Предыдущая', callback_data: `read_ch_${bookId}_${chapterNum - 1}` });
@@ -186,7 +209,7 @@ async function sendChapterByNum(chatId, bookId, chapterNum) {
             { text: '⬅️ К каталогу', callback_data: 'catalog' }
         ]);
 
-        await bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+        await sendLongMessage(chatId, text, 'HTML', { inline_keyboard: kb });
     } catch(e) { console.error('chapter nav error:', e.message); }
 }
 
