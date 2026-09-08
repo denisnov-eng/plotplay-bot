@@ -272,7 +272,7 @@ async function sendCatalog(chatId) {
         }
 
                 // 3. Кнопка меню внизу (невидимый символ вместо точки)
-        await bot.sendMessage(chatId, '\u200b', {
+        await bot.sendMessage(chatId,  , {
             reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
         });
 
