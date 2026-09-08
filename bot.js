@@ -1,5 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const mysql = require('mysql2/promise');
+const https = require('https');
+const http = require('http');
 
 const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID || '99933936';
@@ -31,6 +33,25 @@ console.log('✅ Bot started (MySQL)');
         console.error('❌ DB error:', e.message);
     }
 })();
+
+// === ЗАГРУЗКА КАРТИНОК ЧЕРЕЗ БУФЕР ===
+function downloadImage(url) {
+    return new Promise((resolve, reject) => {
+        const client = url.startsWith('https') ? https : http;
+        const req = client.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PlotPlayBot/1.0)' } }, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                return downloadImage(res.headers.location).then(resolve).catch(reject);
+            }
+            if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+            res.on('error', reject);
+        });
+        req.on('error', reject);
+        req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
+    });
+}
 
 // === РАЗБИЕНИЕ ДЛИННЫХ СООБЩЕНИЙ ===
 async function sendLongMessage(chatId, text, parseMode, replyMarkup) {
@@ -128,21 +149,20 @@ async function sendChapter(chatId, bookId) {
 
         const caption = `${book.genre_icon} <b>${book.title}</b>\n\n${book.description || ''}`;
 
-        // Если есть картинка — отправляем фото с подписью
         if (book.image_url && book.image_url.trim() !== '') {
-            // Формируем полный URL, если путь относительный
             let imgUrl = book.image_url;
             if (imgUrl.startsWith('/')) {
                 imgUrl = 'https://plotpay.ru' + imgUrl;
             }
             try {
-                await bot.sendPhoto(chatId, imgUrl, {
+                console.log('📷 Downloading photo:', imgUrl);
+                const imgBuffer = await downloadImage(imgUrl);
+                await bot.sendPhoto(chatId, imgBuffer, {
                     caption: caption,
                     parse_mode: 'HTML',
                     reply_markup: kb
                 });
             } catch (photoErr) {
-                // Если фото не загрузилось — fallback на текстовое сообщение
                 console.error('Photo send failed:', photoErr.message);
                 await bot.sendMessage(chatId, caption, {
                     parse_mode: 'HTML',
@@ -150,7 +170,6 @@ async function sendChapter(chatId, bookId) {
                 });
             }
         } else {
-            // Нет картинки — обычное текстовое сообщение
             await bot.sendMessage(chatId, caption, {
                 parse_mode: 'HTML',
                 reply_markup: kb
