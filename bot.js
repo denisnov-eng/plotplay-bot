@@ -7,6 +7,8 @@ const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID || '99933936';
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/PlotPlay_Bot/vote';
 const CHAT_URL = process.env.CHAT_URL || 'https://t.me/PlotPlay_Chat';
+const WELCOME_IMG = process.env.WELCOME_IMG || 'https://plotpay.ru/images/welcome.jpg';
+
 if (!TOKEN) { console.error('❌ BOT_TOKEN not set'); process.exit(1); }
 
 const pool = mysql.createPool({
@@ -22,6 +24,9 @@ const pool = mysql.createPool({
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 console.log('✅ Bot started (MySQL)');
+
+// === СОСТОЯНИЯ ПОЛЬЗОВАТЕЛЕЙ ===
+const userStates = {};
 
 // === ПРОВЕРКА ПОДКЛЮЧЕНИЯ К БД ===
 (async () => {
@@ -83,7 +88,33 @@ bot.onText(/\/start/, async (msg) => {
 });
 
 bot.onText(/\/help/, (msg) => {
-    bot.sendMessage(msg.chat.id, '❓ <b>Помощь</b>\n\nНажмите /start чтобы вернуться в главное меню.', { parse_mode: 'HTML' });
+    bot.sendMessage(msg.chat.id, '❓ <b>Помощь</b>\n\nЗадайте свой вопрос, и мы ответим в ближайшее время.', {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [
+            [{ text: '✉️ Написать вопрос', callback_data: 'ask_question' }],
+            [{ text: '⬅️ Меню', callback_data: 'menu' }]
+        ]}
+    });
+});
+
+// === ОБРАБОТЧИК ТЕКСТОВЫХ СООБЩЕНИЙ (ВОПРОСЫ) ===
+bot.on('message', async (msg) => {
+    if (!msg.text || msg.text.startsWith('/')) return;
+    const chatId = msg.chat.id;
+
+    if (userStates[chatId] === 'waiting_question') {
+        delete userStates[chatId];
+        const question = msg.text;
+        const user = msg.from;
+        const notify = `❓ <b>Новый вопрос от пользователя!</b>\n\nИмя: ${user.first_name}\nUsername: @${user.username || 'нет'}\nID: ${user.id}\n\n💬 Вопрос:\n${question}\n\n📅 ${new Date().toLocaleString('ru-RU')}`;
+        try {
+            await bot.sendMessage(ADMIN_ID, notify, { parse_mode: 'HTML' });
+            await bot.sendMessage(chatId, '✅ <b>Ваш вопрос отправлен!</b>\nМы ответим вам в ближайшее время.', { parse_mode: 'HTML' });
+        } catch(e) {
+            console.error('Question send error:', e.message);
+            await bot.sendMessage(chatId, '⚠️ Ошибка отправки. Попробуйте позже.', { parse_mode: 'HTML' });
+        }
+    }
 });
 
 // === CALLBACK ЗАПРОСЫ ===
@@ -103,6 +134,7 @@ bot.on('callback_query', async (cb) => {
         else if (data.startsWith('vote_')) await sendVoteLink(chatId, parseInt(data.replace('vote_', '')));
         else if (data === 'authors') await sendAuthors(chatId);
         else if (data === 'want_author') await sendAuthorRequest(chatId, cb.from);
+        else if (data === 'ask_question') await askQuestion(chatId);
         else if (data === 'season1') await sendSeason1(chatId);
     } catch(err) { console.error('CB error:', err.message); }
 });
@@ -138,11 +170,8 @@ async function sendWelcome(chatId) {
         [{ text: '🚀 Старт', callback_data: 'catalog' }]
     ]};
 
-    // Приветственная картинка (замените URL на свою)
-    const welcomeImg = 'https://plotpay.ru/images/welcome.jpg';
-
     try {
-        const imgBuffer = await downloadImage(welcomeImg);
+        const imgBuffer = await downloadImage(WELCOME_IMG);
         await bot.sendPhoto(chatId, imgBuffer, {
             caption: welcomeText,
             parse_mode: 'HTML',
@@ -150,12 +179,16 @@ async function sendWelcome(chatId) {
         });
     } catch (e) {
         console.error('Welcome photo failed:', e.message);
-        // Fallback: текст без картинки
         await bot.sendMessage(chatId, welcomeText, {
             parse_mode: 'HTML',
             reply_markup: kb
         });
     }
+}
+
+async function askQuestion(chatId) {
+    await bot.sendMessage(chatId, '✉️ <b>Напишите ваш вопрос одним сообщением:</b>\n\n(Отправьте текст, и он будет передан администратору)', { parse_mode: 'HTML' });
+    userStates[chatId] = 'waiting_question';
 }
 
 async function sendCatalog(chatId) {
@@ -201,16 +234,10 @@ async function sendChapter(chatId, bookId) {
                 });
             } catch (photoErr) {
                 console.error('Photo send failed:', photoErr.message);
-                await bot.sendMessage(chatId, caption, {
-                    parse_mode: 'HTML',
-                    reply_markup: kb
-                });
+                await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
             }
         } else {
-            await bot.sendMessage(chatId, caption, {
-                parse_mode: 'HTML',
-                reply_markup: kb
-            });
+            await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: kb });
         }
     } catch(e) { console.error('chapter error:', e.message); }
 }
