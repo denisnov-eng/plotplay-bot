@@ -127,6 +127,7 @@ bot.on('callback_query', async (cb) => {
         else if (data === 'authors') await sendAuthors(chatId);
         else if (data === 'want_author') await sendAuthorRequest(chatId, cb.from);
         else if (data === 'ask_question') await askQuestion(chatId);
+                else if (data === 'i_am_author') await sendAuthorInfo(chatId);    
         else if (data === 'season1') await sendSeason1(chatId);
     } catch(err) { console.error('CB error:', err.message); }
 });
