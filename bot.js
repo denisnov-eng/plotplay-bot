@@ -421,7 +421,7 @@ async function sendVoteLink(chatId, bookId) {
 
         // Проверяем дедлайн
         const now = new Date();
-        const votingEnd = voteInfo.voting_end ? new Date(voting_end) : null;
+       const votingEnd = voteInfo.voting_end ? new Date(voteInfo.voting_end) : null;
         const isClosed = votingEnd && now > votingEnd;
 
         if (isClosed) {
