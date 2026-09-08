@@ -80,17 +80,25 @@ async function sendLongMessage(chatId, text, parseMode, replyMarkup) {
 
 // === КОМАНДЫ ===
 bot.onText(/\/start/, async (msg) => {
-    try { await sendWelcome(msg.chat.id); } catch(e) { console.error('start err:', e.message); }
-});
-
-bot.onText(/\/help/, (msg) => {
-    bot.sendMessage(msg.chat.id, '❓ <b>Помощь</b>\n\nЗадайте свой вопрос, и мы ответим в ближайшее время.', {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [
-            [{ text: '✉️ Написать вопрос', callback_data: 'ask_question' }],
-            [{ text: '⬅️ Меню', callback_data: 'menu' }]
-        ]}
-    });
+    const chatId = msg.chat.id;
+    const user = msg.from;
+    
+    // Обновляем последний заход в БД
+    try {
+        await pool.query(
+            `INSERT INTO users (id, username, first_name, created_at, last_seen_at) 
+             VALUES (?, ?, ?, NOW(), NOW())
+             ON DUPLICATE KEY UPDATE 
+                username = VALUES(username),
+                first_name = VALUES(first_name),
+                last_seen_at = NOW()`,
+            [user.id, user.username || null, user.first_name || '']
+        );
+    } catch(e) {
+        console.error('User tracking error:', e.message);
+    }
+    
+    try { await sendWelcome(chatId); } catch(e) { console.error('start err:', e.message); }
 });
 
 // === ОБРАБОТЧИК ТЕКСТОВЫХ СООБЩЕНИЙ ===
