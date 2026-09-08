@@ -234,7 +234,7 @@ async function sendCatalog(chatId) {
             }
         }
 
-        await bot.sendMessage(chatId, '⬅️ Вернуться в меню', {
+                await bot.sendMessage(chatId, '📚 Выберите книгу:', {
             reply_markup: { inline_keyboard: [[{ text: '⬅️ Меню', callback_data: 'menu' }]] }
         });
 
