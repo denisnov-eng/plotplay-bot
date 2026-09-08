@@ -116,17 +116,46 @@ async function sendCatalog(chatId) {
 
 async function sendChapter(chatId, bookId) {
     try {
-        const [[book]] = await pool.query("SELECT title, genre_icon, description FROM mass_stories WHERE id=? AND status='active'", [bookId]);
+        const [[book]] = await pool.query("SELECT title, genre_icon, description, image_url FROM mass_stories WHERE id=? AND status='active'", [bookId]);
         if (!book) return bot.sendMessage(chatId, '❌ Книга не найдена');
-        await bot.sendMessage(chatId, `${book.genre_icon} <b>${book.title}</b>\n\n${book.description}`, {
-            parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: [
-                [{ text: '📖 Читать', callback_data: `read_text_${bookId}` }],
-                [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
-                [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
-                [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
-            ]}
-        });
+
+        const kb = { inline_keyboard: [
+            [{ text: '📖 Читать', callback_data: `read_text_${bookId}` }],
+            [{ text: '🗳️ Голосовать', callback_data: `vote_${bookId}` }],
+            [{ text: '💬 Обсуждать', url: `${CHAT_URL}?topic=${bookId}` }],
+            [{ text: '⬅️ К каталогу', callback_data: 'catalog' }]
+        ]};
+
+        const caption = `${book.genre_icon} <b>${book.title}</b>\n\n${book.description || ''}`;
+
+        // Если есть картинка — отправляем фото с подписью
+        if (book.image_url && book.image_url.trim() !== '') {
+            // Формируем полный URL, если путь относительный
+            let imgUrl = book.image_url;
+            if (imgUrl.startsWith('/')) {
+                imgUrl = 'https://plotpay.ru' + imgUrl;
+            }
+            try {
+                await bot.sendPhoto(chatId, imgUrl, {
+                    caption: caption,
+                    parse_mode: 'HTML',
+                    reply_markup: kb
+                });
+            } catch (photoErr) {
+                // Если фото не загрузилось — fallback на текстовое сообщение
+                console.error('Photo send failed:', photoErr.message);
+                await bot.sendMessage(chatId, caption, {
+                    parse_mode: 'HTML',
+                    reply_markup: kb
+                });
+            }
+        } else {
+            // Нет картинки — обычное текстовое сообщение
+            await bot.sendMessage(chatId, caption, {
+                parse_mode: 'HTML',
+                reply_markup: kb
+            });
+        }
     } catch(e) { console.error('chapter error:', e.message); }
 }
 
