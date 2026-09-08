@@ -410,39 +410,22 @@ async function sendChapterByNum(chatId, bookId, chapterNum) {
 
 async function sendVoteLink(chatId, bookId) {
     try {
-        // 1. Получаем цену книги
-        const [[voteInfo]] = await pool.query(
-            "SELECT price_rub FROM mass_stories WHERE id=?",
-            [bookId]
-        );
-
-        if (!voteInfo) {
-            return bot.sendMessage(chatId, '❌ Книга не найдена');
-        }
+        const [[voteInfo]] = await pool.query("SELECT price_rub FROM mass_stories WHERE id=?", [bookId]);
+        if (!voteInfo) return bot.sendMessage(chatId, '❌ Книга не найдена');
 
         const price = voteInfo.price_rub || 49;
-        
-        // 2. Формируем правильный URL для Web App
-        const webAppUrl = `${WEBAPP_URL}?book=${bookId}`;
+        const webAppUrl = `https://t.me/PlotPlay_Bot/vote?book=${bookId}`; // Возвращаем t.me ссылку
 
-        // 3. Сразу отправляем кнопку, которая открывает приложение
-        await bot.sendMessage(chatId, `🗳️ <b>Голосование открыто!</b>\n\nСтоимость голоса: ${price}₽`, {
+        await bot.sendMessage(chatId, `🗳️ <b>Голосование</b>`, {
             parse_mode: 'HTML',
             reply_markup: {
                 inline_keyboard: [
-                    [
-                        { 
-                            text: `🗳️ Голосовать за ${price}₽`, 
-                            web_app: { url: webAppUrl } // <-- ВАЖНО: именно web_app, а не url
-                        }
-                    ],
-                    [
-                        { text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }
-                    ]
+                    // Используем обычную url кнопку
+                    [{ text: `🗳️ Открыть голосование (${price}₽)`, url: webAppUrl }],
+                    [{ text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }]
                 ]
             }
         });
-
     } catch(e) {
         console.error('vote error:', e.message);
         bot.sendMessage(chatId, '⚠️ Ошибка открытия голосования');
