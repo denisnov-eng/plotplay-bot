@@ -410,16 +410,42 @@ async function sendChapterByNum(chatId, bookId, chapterNum) {
 
 async function sendVoteLink(chatId, bookId) {
     try {
-        const [[book]] = await pool.query("SELECT price_rub FROM mass_stories WHERE id=?", [bookId]);
-        const price = book ? book.price_rub : 49;
-        await bot.sendMessage(chatId, `🗳️ <b>Голосование открыто!</b>\n\n💰 ${price}₽\n⏳ 72 часа`, {
+        // Проверяем статус голосования в БД
+        const [[voteInfo]] = await pool.query(
+            "SELECT price_rub, voting_end FROM mass_stories WHERE id=?",
+            [bookId]
+        );
+
+        if (!voteInfo) {
+            return bot.sendMessage(chatId, '❌ Книга не найдена');
+        }
+
+        // Проверяем, открыто ли голосование
+        const now = new Date();
+        const votingEnd = voteInfo.voting_end ? new Date(voteInfo.voting_end) : null;
+        const isClosed = votingEnd && now > votingEnd;
+
+        if (isClosed) {
+            return bot.sendMessage(chatId,
+                '⏳ <b>Голосование завершено!</b>\n\nОжидайте следующую главу и новые варианты выбора.',
+                { parse_mode: 'HTML' }
+            );
+        }
+
+        // Голосование открыто — сразу открываем Web App
+        const price = voteInfo.price_rub || 49;
+        await bot.sendMessage(chatId, `🗳️ <b>Голосование</b>`, {
             parse_mode: 'HTML',
             reply_markup: { inline_keyboard: [
-                [{ text: '🗳️ Открыть голосование', url: WEBAPP_URL }],
-                [{ text: '⬅️ К главе', callback_data: `read_${bookId}` }]
+                [{ text: `🗳️ Голосовать (${price}₽)`, web_app: { url: `${WEBAPP_URL}?book=${bookId}` } }],
+                [{ text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }]
             ]}
         });
-    } catch(e) { console.error('vote error:', e.message); }
+
+    } catch(e) {
+        console.error('vote error:', e.message);
+        bot.sendMessage(chatId, '⚠️ Ошибка проверки голосования');
+    }
 }
 
 async function sendAuthors(chatId) {
