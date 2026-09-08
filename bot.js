@@ -156,7 +156,10 @@ async function sendWelcome(chatId) {
 
 Ты готов к приключениям?`;
 
-    const kb = { inline_keyboard: [[{ text: '🚀 Старт', callback_data: 'catalog' }]] };
+    const kb = { inline_keyboard: [
+        [{ text: '🚀 Старт', callback_data: 'catalog' }],
+        [{ text: '✍️ Я автор', callback_data: 'i_am_author' }]
+    ]};
 
     try {
         const imgBuffer = await downloadImage(WELCOME_IMG);
