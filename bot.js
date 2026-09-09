@@ -433,7 +433,7 @@ async function sendVoteLink(chatId, bookId) {
             parse_mode: 'HTML',
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: `🗳️ Голосовать (${price}₽)`, web_app: { url: 'https://plotpay.ru/vote/index.html' } }],
+                    [{ text: `🗳️ Голосовать (${price}₽)`, web_app: { url: 'https://plotpay.ru/index.html' } }],
                     [{ text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }]
                 ]
             }
