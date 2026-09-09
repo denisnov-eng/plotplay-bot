@@ -429,14 +429,14 @@ async function sendVoteLink(chatId, bookId) {
 
         const price = voteInfo.price_rub || 49;
         
-        // Используем WEBAPP_URL из настроек (t.me/PlotPlay_Bot/vote)
-        const webAppUrl = `${WEBAPP_URL}?book=${bookId}`;
+        // Одна ссылка для всех книг — просто открываем Web App
+        const webAppUrl = 'https://plotpay.ru/';
 
         await bot.sendMessage(chatId, `🗳️ <b>Голосование</b>`, {
             parse_mode: 'HTML',
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: `🗳️ Голосовать (${price}₽)`, web_app: { url: webAppUrl } }],
+                    [{ text: `🗳️ Голосовать (${price}₽)`, url: webAppUrl }],
                     [{ text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }]
                 ]
             }
