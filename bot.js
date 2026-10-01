@@ -146,23 +146,23 @@ bot.on('callback_query', async (cb) => {
 // === ФУНКЦИИ ===
 
 async function sendWelcome(chatId) {
-    const welcomeText = `🎭 <b>Добро пожаловать в PlotPlay!</b>
+    const welcomeText = `Добро пожаловать в PlotPlay!
 
 Здесь ты не просто читаешь — ты решаешь, чем закончится история.
 
-7 авторов. 7 книг. 7 жанров.
+<b>7 авторов. 7 книг. 7 жанров.</b>
 И только ТВОЙ голос определяет, что будет дальше.
 
-⚡ <b>Как это работает:</b>
+⚡️ Как это работает:
 
 📖 Читай новую главу
-🔀 В конце — выбор: как поступит герой?
+🔀 В конце — твой выбор: как поступит герой?
 ⏳ У тебя 72 часа, чтобы проголосовать
 ✍️ Автор пишет продолжение по итогам голосования
 
 Каждый голос — это 1 шаг, который меняет судьбу персонажа. Чем больше голосов — тем сильнее твой выбор.
 
-🏆 <b>Сезон 1 уже стартовал!</b>
+🏆 1 Сезон уже стартовал!
 Призовой фонд: 40 000₽ для лучших авторов.
 
 💎 1 голос = 49₽
@@ -172,7 +172,8 @@ async function sendWelcome(chatId) {
 
     const kb = { inline_keyboard: [
         [{ text: '🚀 Старт', callback_data: 'catalog' }],
-        [{ text: '✍️ Я автор', callback_data: 'i_am_author' }]
+        [{ text: '✍️ Я автор', callback_data: 'i_am_author' }],
+        [{ text: '📢 Новости проекта', url: 'https://t.me/plotplay_hub' }]
     ]};
 
     try {
@@ -188,7 +189,6 @@ async function sendWelcome(chatId) {
         await bot.sendMessage(chatId, welcomeText, { parse_mode: 'HTML', reply_markup: kb });
     }
 }
-
 async function askQuestion(chatId) {
     await bot.sendMessage(chatId, '✉️ <b>Напишите ваш вопрос одним сообщением:</b>\n\n(Отправьте текст, и он будет передан администратору)', { parse_mode: 'HTML' });
     userStates[chatId] = 'waiting_question';
