@@ -80,6 +80,37 @@ async function sendLongMessage(chatId, text, parseMode, replyMarkup) {
 
 // === КОМАНДЫ ===
 bot.onText(/\/start/, async (msg) => {
+bot.onText(/\/help/, async (msg) => {
+    const chatId = msg.chat.id;
+    const helpText = `<b>❓ Как пользоваться PlotPlay</b>
+
+📚 <b>Чтение книг:</b>
+• Нажмите «🚀 Старт» → выберите книгу
+• «📖 Подробнее» — описание и варианты
+• «📖 Читать» — текст текущей главы
+• В конце главы — ваш выбор развития сюжета
+
+🗳️ <b>Голосование:</b>
+• «🗳️ Голосовать» — откроет приложение
+• 1 голос = 49₽ или пакет 10 голосов = 199₽
+• Голоса списываются за каждый выбор
+• Голосование активно 72 часа
+
+✍️ <b>Для авторов:</b>
+• «Я автор» — подать заявку на участие
+• Призовой фонд: 40 000₽
+
+💬 <b>Поддержка:</b>
+• Есть вопрос? Нажмите кнопку ниже`;
+
+    const kb = { inline_keyboard: [
+        [{ text: '🚀 Начать', callback_data: 'catalog' }],
+        [{ text: '❓ Задать вопрос', callback_data: 'ask_question' }],
+        [{ text: '📢 Новости', url: 'https://t.me/plotplay_hub' }]
+    ]};
+
+    await bot.sendMessage(chatId, helpText, { parse_mode: 'HTML', reply_markup: kb });
+});
     const chatId = msg.chat.id;
     const user = msg.from;
     
