@@ -204,7 +204,7 @@ async function sendWelcome(chatId) {
     const kb = { inline_keyboard: [
         [{ text: '🚀 Старт', callback_data: 'catalog' }],
         [{ text: '✍️ Я автор', callback_data: 'i_am_author' }],
-        [{ text: '📢 Новости проекта', url: 'https://t.me/plotplay_hub' }]
+        [{ text: '📢 Новости проекта', url: 'https://t.me/PlotPlayHub' }]
     ]};
 
     try {
