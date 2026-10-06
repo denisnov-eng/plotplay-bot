@@ -460,11 +460,11 @@ async function sendVoteLink(chatId, bookId) {
 
         const price = voteInfo.price_rub || 49;
 
-        await bot.sendMessage(chatId, `🗳️ <b>Голосование</b>`, {
+        await bot.sendMessage(chatId, `🗳️ <b>Голосование</b>\n\nВыбери, как продолжится история!\n🎁 Первые 3 голоса — <b>бесплатно</b>`, {
             parse_mode: 'HTML',
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: `🗳️ Голосовать (${price}₽)`, web_app: { url: 'https://plotpay.ru/index.html?v=4' } }],
+                    [{ text: `🗳️ Выбрать продолжение`, web_app: { url: 'https://plotpay.ru/index.html?v=4' } }],
                     [{ text: '⬅️ Назад к главе', callback_data: `read_${bookId}` }]
                 ]
             }
